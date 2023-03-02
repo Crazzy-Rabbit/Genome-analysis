@@ -3,7 +3,7 @@
 * 与驯化相关的研究热点主要集中在：家养动物何时何地被驯化？驯化途径是什么？驯化表型是什么？与驯化表型相关的基因有哪些？家养动物驯化地点大致主要集中在三个地方：近东地区、中国中部和安第斯山脉。几乎所有家养动物都是在近几千年或几万年内被驯化。
 * 驯化的途径主要分为三种：*共生、捕食和直接驯化*。共生：指人类与被驯化物种的野外物种长期处在相同环境下，逐渐与人和谐共处达到驯化的目的，猫和狗是通过该方式驯化的；捕食：指人类相对被驯化动物是捕食者，当人类狩猎捕食的个体太多的时候，会将一些个体圈养起来，进而达到驯化的目的，牛与猪是通过该方式驯化：直接驯化：指人类为了某项具体的目的直接改造物种的方式，例如人类养蚕是为了丝绸织布，驯化马和骆能是为了运输。
 * 人工驯化的家养动物通常需要经历两次群体瓶颈时期：*驯化事件和品种形成事件*。驯化事件指的是从野生状态到家养状态的过程，一般发生在一万年左右，例如灰狼驯化成狗的过程。品种形成事件则是指现代品种的形成，一般发生在最近几百年左右，例如各个不同品种狗的形成。驯化会导致一系列表型的显著改变，在家养动物中，这种表型的选择通常包括温顺程度、行为、体型大小与形态、皮肤和毛发颜色以及与繁殖相关性状等方面的变化。
-                       ![image](https://user-images.githubusercontent.com/111029483/222344636-6f245dc3-50ea-4222-a117-f535649d8ac8.png)
+* ![image](https://user-images.githubusercontent.com/111029483/222344636-6f245dc3-50ea-4222-a117-f535649d8ac8.png)
 ### 等位基因频谱（SFS）：
 基于 SFS 重构群体历史的常用软件有∂a∂i与 Fastsimcoal2
 * *∂a∂i*：使用扩散近似法（diffusion approximation）来推断最多 3 个群体的种群大小变化、种群分化及迁移率等历史事件；
@@ -83,12 +83,13 @@ uniq参数说明：
                                        --out QC.common_89_cattle_851_ASIA-geno005-maf003.gcta.out
 ```
 ##### EIGENSOFT软件
-```
+
 1. 转换格式：
-EIGENSOFT中内置的convertf 文件转化为smartpca的输入文件
-
+* EIGENSOFT中内置的convertf 文件转化为smartpca的输入文件
+```
 convertf -p transfer.conf
-
+```
+```
 需要一个config file，将文件的输入输出写进去。
 ##config file
 genotypename:    myplink_test.ped
@@ -101,11 +102,12 @@ indivoutname:    example.ind
 familynames:    NO
 
 产生三个pca所需的输入文件 example.eigenstrat example.snp example.ind
-
+```
 2. smartpca做PCA
-
+```
 smartpca -p runningpca.conf
-
+```
+```
 ##config file
 genotypename: example.geno
 snpname: example.snp
@@ -125,11 +127,12 @@ for K in 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do /home/software/admixture_linux-1.
 # 提取CV值
 CV error最小的为最佳K值
 grep -h CV log*.out
-
+```
 
 Admixture.sh
 touch admixture.sh
 nohup bash admixture,sh &
+```
 ## 提取：
 bcftools view -S id.txt  common_89_cattle_851_ASIA.vcf  -Ov > sample-select.vcf
 ## 转格式：
@@ -149,6 +152,8 @@ grep -h CV log*.out
 plink  --bfile QC.ld.cattle_204_hebing_Chr1_29_genotype.nchr-geno005-maf003-502502 \
        --allow-extra-chr --chr-set 29  \
        --genome
+```
+```
 # 转换为.meg格式的矩阵形式
 
 PLINK_genome_MEGA.pl
@@ -156,8 +161,8 @@ PLINK_genome_MEGA.pl
 第二个open里改成自己的fam文件
 第三个open里将>后面的改成输出的文件名.meg
 在下面的sample_size里，将数量改成自己使用的数量
-
-
+```
+```
 #!usr/bin/perl
 # define array of input and output files
 open (AAA,"plink.genome") || die "can't open AAA";
@@ -257,29 +262,29 @@ treemix -i sample.treemix.in.gz -o sample.ML.tree -k 1000 -global
 * TreeMix基于全基因组多态性模拟遗传漂变来推断种群之间的关系。首先估计样本数量之间关系的系统树图，然后来比较系统树模拟构建与观察到的群体之间的变异结构。当群体比通过分杈树建模表现出更密切的关系，则说明群体之间在历史上有过杂合过程。
 * TreeMix在系统法语中增加边线使之成为一个系统网络，这些边缘的位置和方向都是有信息的；如果一个边缘产生更多的基底系统网络这表明杂交发生事件比较早或者来源于另一个分化的群体。
 
-  1. 计算等位基因频率
-    * 转换为tped格式，生成sample.tped和sample.tfam文件。
+1. 计算等位基因频率
+  * 转换为tped格式，生成sample.tped和sample.tfam文件。
 ```
 vcftools --vcf QC.sample-select-geno005-maf003.vcf --plink-tped --out sample
 
 sample.tfam修改第一列数据为breed ID。
 ```
-    * 提取文件sample.pop.cov，格式为：共三列，前两列与修改后的sample.tfam前两列一样，为群体ID和样本ID，第三列和第一列一致，tab分隔。
+  * 提取文件sample.pop.cov，格式为：共三列，前两列与修改后的sample.tfam前两列一样，为群体ID和样本ID，第三列和第一列一致，tab分隔。
 ```
 cat sample.tfam |awk '{print $1"\t"$2"\t"$1}' >sample.pop.cov
 ```
-    * 计算等位基因组的频率，生成plink.frq.strat和plink.nosex文件
+  * 计算等位基因组的频率，生成plink.frq.strat和plink.nosex文件
 ```
 plink --threads 12 --tfile sample --freq --allow-extra-chr --chr-set 29 --within sample.pop.cov 
 # 压缩等位基因频率文件
 gzip plink.frq.strat 
 ```
-     * 转换格式【耗时小时计】
+   * 转换格式【耗时小时计】
 ```
 #用treemix自带脚本进行格式转换，notes：输入输出都为压缩文件，plink2treemix.py使用python2并需要绝对路径（否则报错）。
 python2 /home/sll/miniconda3/bin/plink2treemix.py plink.frq.strat.gz sample.treemix.in.gz 
 ```
-  2. treemix推断基因流
+2. treemix推断基因流
 ```
 # 多次分析以评估最佳m值
 比如m取1-10(常用1-5,1-10)，每个m值重复5次(至少两次)
@@ -308,8 +313,8 @@ done
 -g old.vertices.gz old.edges.gz #使用之前生成的树和图结果，用-g指定之前的两个结果文件
 -cor_mig known_events and -climb #合并已知的迁移事件
 ```
-  3. 最佳迁移边缘个数选择
-    * 将生成的llik、cov、modelcov文件放置在同一文件夹，使用R包OptM分析：
+3. 最佳迁移边缘个数选择
+  * 将生成的llik、cov、modelcov文件放置在同一文件夹，使用R包OptM分析：
 ```
 library(OptM)
 linear = optM("./data") ##文件夹名
@@ -317,8 +322,8 @@ plot_optM(linear)
 
 生成图中，当Δm值最小时的migration edges为最佳迁移边缘个数
 ```
-  4. 基因渗入作图
-    * 使用m=最佳迁移边缘个数结果文件做图
+4. 基因渗入作图
+  * 使用m=最佳迁移边缘个数结果文件做图
 ```
 source("plotting_funcs.R") #treemix scr文件夹中R脚本
 plot_tree("TreeMix") #TreeMix为结果文件前缀
