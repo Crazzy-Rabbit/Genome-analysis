@@ -53,24 +53,96 @@
 
 * *性别鉴定*，在动物中可以由性染色体的测序深度来确定，由于雄性为XY，雌性为XX，因此雌性的性染色体测序深度应为雄性的二倍。分别统计每个样本在常染色体、X 染色体和 Y 染色体上 SNP 位点的平均 reads 覆盖深度，以常染色体的深度为分母，分别计算了  X 和  Y  染色体的相对覆盖深度。预期观察到雄性个体中的 X 染色体相对覆盖深度为 0.5 且 Y 染色体也为 0.5，而雌性个体中 X 染色体相对覆盖率为 1 且Y 染色体为 0。
 
-## 群体结构及渗透分析
+## 群体遗传结构及渗透分析
 ### 计算群特异性位点
 ```
-1. 提取
+## 1. 提取群体vcf文件
 bcftools提取和牛与其他群体vcf文件(大的vcf文件用的是未过滤maf 和geno的)，然后用Maf和geno过滤后的SNP即这个群体获得的SNP数。
-2. 取特异性位点
+
+## 2. 取特异性位点
 再把bim文件进行sort a.txt b.txt b.txt | uniq -u操作得到a群体特异性位点。
 
 sort QC.01.10.JPBC-geno005-maf003.bim QC.01.10.sample115-geno005-maf003.bim QC.01.10.sample115-geno005-maf003.bim | uniq -u > JPBC.only.txt
 
 uniq参数说明：
--d 仅显示重复出现的行列;
--u 仅显示出一次的行列。
+-d     仅显示重复出现的行列;
+-u     仅显示出一次的行列。
 ```
+### 群体遗传结构
+#### PCA
+纯数学的运算方法，可以将多个相关变量经过线形转换选出较少个数的重要变量。
+##### GCTA软件
+```
+## make germ
+/home/software/gcta_1.92.3beta3/gcta64 --bfile QC.common_89_cattle_851_ASIA-geno005-maf003 \
+                                       --make-grm --autosome-num 29 \
+                                       --out QC.common_89_cattle_851_ASIA-geno005-maf003.gcta
+## PCA
+/home/software/gcta_1.92.3beta3/gcta64 --grm QC.common_89_cattle_851_ASIA-geno005-maf003.gcta \
+                                       --pca 4 \
+                                       --out QC.common_89_cattle_851_ASIA-geno005-maf003.gcta.out
+```
+##### EIGENSOFT软件
+1. 转换格式：
+EIGENSOFT中内置的convertf 文件转化为smartpca的输入文件
+```
+convertf -p transfer.conf
+
+需要一个config file，将文件的输入输出写进去。
+##config file
+genotypename:    myplink_test.ped
+snpname:         myplink_test.map # or example.map, either works
+indivname:       myplink_test.ped # or example.ped, either works
+outputformat:    EIGENSTRAT
+genotypeoutname: example.eigenstratgeno
+snpoutname:      example.snp
+indivoutname:    example.ind
+familynames:    NO
+```
+产生三个pca所需的输入文件 example.eigenstrat example.snp example.ind
+
+2. smartpca做PCA
+
+smartpca -p runningpca.conf
+```
+##config file
+genotypename: example.geno
+snpname: example.snp
+indivname: example.ind
+evecoutname: example.pca.evec
+evaloutname: example.eval
+altnormstyle: NO
+numoutevec: 10
+numoutlieriter: 5
+outliersigmathresh: 6.0
+```
+##### Admixture
+群体结构分析的算法模型为：假设所有群体拥有K个祖先，每个群体的特征由其每个位点的等位基因频率决定，在哈代-温伯格平衡下，使用最大似然估计算法将实际群体中的每个个体以概率的形式，计算每个个体的基因组变异来源，用Q值表示，Q值越大，表明该位点来自这个祖先群体的可能性越大，从而将每个位点归类到不同的祖先成分。
+```
+# admixture
+for K in 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do /home/software/admixture_linux-1.3.0/admixture --cv QC.sample-northeast_Asia-geno005-maf003.bed $K | tee log${K}.out; done
+# 提取CV值
+CV error最小的为最佳K值
+grep -h CV log*.out
 
 
-
-
+Admixture.sh
+touch admixture.sh
+nohup bash admixture,sh &
+## 提取：
+bcftools view -S id.txt  common_89_cattle_851_ASIA.vcf  -Ov > sample-select.vcf
+## 转格式：
+plink --allow-extra-chr --chr-set 29 -vcf sample-select.vcf --make-bed --double-id --out sample-select
+## 过滤： 
+plink --allow-extra-chr --chr-set 29 -bfile sample-select --geno 0.05 --maf 0.03 --make-bed --out QC.sample-select-geno005-maf003
+## admixture
+for K in 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do admixture --cv QC.sample-select-geno005-maf003.bed $K | tee log${K}.out; done
+## 提取CV值
+## CV error最小的为最佳K值
+grep -h CV log*.out 
+```
+##### 系统发育树
+###### MEGA
 
 
 
