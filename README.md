@@ -83,9 +83,10 @@ uniq参数说明：
                                        --out QC.common_89_cattle_851_ASIA-geno005-maf003.gcta.out
 ```
 ##### EIGENSOFT软件
+```
 1. 转换格式：
 EIGENSOFT中内置的convertf 文件转化为smartpca的输入文件
-```
+
 convertf -p transfer.conf
 
 需要一个config file，将文件的输入输出写进去。
@@ -98,11 +99,11 @@ genotypeoutname: example.eigenstratgeno
 snpoutname:      example.snp
 indivoutname:    example.ind
 familynames:    NO
-```
+
 产生三个pca所需的输入文件 example.eigenstrat example.snp example.ind
 
 2. smartpca做PCA
-```
+
 smartpca -p runningpca.conf
 
 ##config file
@@ -142,13 +143,14 @@ for K in 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do admixture --cv QC.sample-select-g
 grep -h CV log*.out 
 ```
 #### 系统发育树
-##### MEGA
+##### 1 MEGA
 ```
 # 计算genome
 plink  --bfile QC.ld.cattle_204_hebing_Chr1_29_genotype.nchr-geno005-maf003-502502 \
        --allow-extra-chr --chr-set 29  \
        --genome
 # 转换为.meg格式的矩阵形式
+
 PLINK_genome_MEGA.pl
 第一个open里改成自己的genome文件
 第二个open里改成自己的fam文件
@@ -197,7 +199,7 @@ close AAA;
 close BBB;
 close CCC;
 ```
-##### RAxML(进化树):
+##### 2 RAxML(进化树):
 ```
 1、转为phy格式：
 python /home/sll/software/vcf2phylip.py --input FASN.vcf.recode.vcf
@@ -216,6 +218,118 @@ raxmlHPC-PTHREADS-SSE3 -f a -m GTRGAMMA \
 -n ex输出文件的后缀为 .ex 。
 -T 20指定多线程运行的 CPUs 。
 ```
+
+##### 3 Treemix(群体树):
+```
+1.计算等位基因频率
+# 转换为tped格式，生成sample.tped和sample.tfam文件。
+vcftools --vcf QC.sample-select-geno005-maf003.vcf --plink-tped --out sample
+
+# sample.tfam修改第一列数据为breed ID。
+
+# 提取文件sample.pop.cov，格式为：共三列，前两列与修改后的sample.tfam前两列一样，为群体ID和样本ID，第三列和第一列一致，tab分隔。
+cat sample.tfam |awk '{print $1"\t"$2"\t"$1}' >sample.pop.cov
+
+# 计算等位基因组的频率，生成plink.frq.strat和plink.nosex文件
+plink --threads 12 --tfile sample \
+                   --freq --allow-extra-chr \
+		   --chr-set 29 \
+		   --within sample.pop.cov 
+#压缩等位基因频率文件
+gzip plink.frq.strat 
+
+# 转换格式【耗时小时计】
+#用treemix自带脚本进行格式转换，notes：输入输出都为压缩文件，plink2treemix.py使用python2并需要绝对路径（否则报错）。
+python2 /home/sll/miniconda3/bin/plink2treemix.py plink.frq.strat.gz sample.treemix.in.gz 
+
+2. treemix系统发育分析（ML）
+群体间的系统发育树，每个分支代表一个群体。
+
+treemix -i sample.treemix.in.gz -o sample.ML.tree -k 1000 -global
+
+结果文件sample.treemix.treeout.gz解压后可用ITOL进行可视化
+```
+**注意：若使用NJ法构建进化树，则不能过滤LD，而使用ML法构建进化树时则可过滤LD！！！
+
+### 基因流、群体历史、选择信号
+
+#### Treemix推断基因流（加了外群）:
+* TreeMix基于全基因组多态性模拟遗传漂变来推断种群之间的关系。首先估计样本数量之间关系的系统树图，然后来比较系统树模拟构建与观察到的群体之间的变异结构。当群体比通过分杈树建模表现出更密切的关系，则说明群体之间在历史上有过杂合过程。
+* TreeMix在系统法语中增加边线使之成为一个系统网络，这些边缘的位置和方向都是有信息的；如果一个边缘产生更多的基底系统网络这表明杂交发生事件比较早或者来源于另一个分化的群体。
+```
+1.计算等位基因频率
+# 转换为tped格式，生成sample.tped和sample.tfam文件。
+vcftools --vcf QC.sample-select-geno005-maf003.vcf --plink-tped --out sample
+
+# sample.tfam修改第一列数据为breed ID。
+
+# 提取文件sample.pop.cov，格式为：共三列，前两列与修改后的sample.tfam前两列一样，为群体ID和样本ID，第三列和第一列一致，tab分隔。
+cat sample.tfam |awk '{print $1"\t"$2"\t"$1}' >sample.pop.cov
+
+# 计算等位基因组的频率，生成plink.frq.strat和plink.nosex文件
+plink --threads 12 --tfile sample --freq --allow-extra-chr --chr-set 29 --within sample.pop.cov 
+#压缩等位基因频率文件
+gzip plink.frq.strat 
+
+#转换格式【耗时小时计】
+#用treemix自带脚本进行格式转换，notes：输入输出都为压缩文件，plink2treemix.py使用python2并需要绝对路径（否则报错）。
+python2 /home/sll/miniconda3/bin/plink2treemix.py plink.frq.strat.gz sample.treemix.in.gz 
+2.treemix推断基因流
+# 多次分析以评估最佳m值
+比如m取1-10(常用1-5,1-10)，每个m值重复5次(至少两次)
+for m in {1..5}
+do
+	{
+	for i in {1..5}
+	do
+		{
+		   treemix -i sample.treemix.in.gz -o sample.${m}.${i} -bootstrap 100 -root wBGU -m ${m} -k 500 -noss
+		}
+	done
+	}
+done
+
+-i 指定基因频率输入文件
+-o 指定输出文件前缀
+-tf      【可选】指定树文件，指定后就使用指定树的拓扑结构(最好把支持率和其他无关信息都删除，只留最简单的Newick格式)，否则treemix会推断拓扑
+-root    指定外类群(指定的是居群名称)，多个用逗号分隔；最好指定，否则后面plot_tree画树没找到更换外类群的参数会很麻烦
+-m       为the number of migration edges即基因渗入的次数
+-k 1000  因为SNP之间不是独立位点，为了避免连锁不平衡，用k参数指定SNP数量有连锁，比如这里指定用1000个SNP组成的blocks评估协方差矩阵
+-se      计算迁移权重的标准误差(计算成本高)，如果想省时间可以不用这个参数
+-bootstrap 为了判断给定树拓扑的可信度，在blocks运行bootstrap重复
+-global  在增加所有种群后做一轮全局重组。
+-noss    关闭样本量校正。TreeMix计算协方差会考虑每个种群的样本量，有些情况(如果有种群的样本只有1个)会过度校正，可以关闭。
+-g old.vertices.gz old.edges.gz #使用之前生成的树和图结果，用-g指定之前的两个结果文件
+-cor_mig known_events and -climb #合并已知的迁移事件
+
+2.2. 最佳迁移边缘个数选择
+将生成的llik、cov、modelcov文件放置在同一文件夹，使用R包OptM分析：
+
+library(OptM)
+linear = optM("./data") ##文件夹名
+plot_optM(linear)
+
+生成图中，当Δm值最小时的migration edges为最佳迁移边缘个数
+2.3.基因渗入作图
+使用m=最佳迁移边缘个数结果文件做图
+
+source("plotting_funcs.R") #treemix scr文件夹中R脚本
+plot_tree("TreeMix") #TreeMix为结果文件前缀
+
+##===== 绘制混合树====
+prefix="sample.3"  ## treemix产生的结果文件前缀
+library(RColorBrewer)
+library(R.utils)
+par(mfrow=c(2,3))
+for(edge in 1:3){
+  plot_tree(cex=0.8,paste0(prefix,".",edge))
+  title(paste(edge,"repetition"))
+} # 放的是m012345，则0:5
+```
+#### f3、f4检验以及D检验:
+* D 统计量（Patterson’s D  statistic）是目前最广为使用的渗入检测方法之一。D 统计量需要四个群体，这里称之为 P1、P2、P3 和 O。他们的系统发育关系如图 1-15 所示，为(((P1,P2)P3,)O)。其中，P1 和 P2 为姐妹群，O 为外群。对于这四个群体中存在的双等位 SNP，以外群O 中的类型作为祖先型 A（即 ancestral  allele），另一种则为衍生型 B（即 derived allele）。在已知的系统发育关系的情况下，基因组上绝大多数 SNP 在这四个群体中的排布模式应该为 BBAA，即 P1 和 P2 同为衍生型等位基因，而 P3 和 O 同为祖先型的等位基因。BBAA 的模式是符合系统发育关系的，但如果 P2 和 P3 之间发生了基因流，那么则会产生大量 ABBA 模式的位点，即 P2 和 P3 共享了同一种等位基因。反之，如果 P1 和 P3 之间发生了渗入，则会产生大量 BABA 模式的位点。![image](https://user-images.githubusercontent.com/111029483/222377047-991108ca-381b-4e53-909b-f1cb211bcce6.png)
+* 但实际上，由于 P1、P2 和 P3 的共同祖先在某些位点上可能是存在多态性的，这种多态性可能会随机分配给这三个群体，从而导致 ABBA 或者 BABA 的情况。这种现象通常被称为不完全谱系分选（incomplete  lineage  sorting，ILS）。因此单独去检测ABBA 或者 BABA 模式的位点数量无法判断它们是由于 ILS 还是渗入导致的。但由于ILS 是不受选择的，所以它产生的 ABBA 和 BABA 模式的位点数量应该是大致相当的。所以我们可以通过比较 ABBA 和 BABA 的数量是否有显著的差异来判断是单纯的 ILS还是发生了渗入。
+* ![image](https://user-images.githubusercontent.com/111029483/222377311-d0c5c6f9-5d4b-4cbd-91a1-26dc15a9d9e3.png)
 
 
 
