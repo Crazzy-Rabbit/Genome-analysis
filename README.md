@@ -256,25 +256,31 @@ treemix -i sample.treemix.in.gz -o sample.ML.tree -k 1000 -global
 #### Treemix推断基因流（加了外群）:
 * TreeMix基于全基因组多态性模拟遗传漂变来推断种群之间的关系。首先估计样本数量之间关系的系统树图，然后来比较系统树模拟构建与观察到的群体之间的变异结构。当群体比通过分杈树建模表现出更密切的关系，则说明群体之间在历史上有过杂合过程。
 * TreeMix在系统法语中增加边线使之成为一个系统网络，这些边缘的位置和方向都是有信息的；如果一个边缘产生更多的基底系统网络这表明杂交发生事件比较早或者来源于另一个分化的群体。
+
+  1. 计算等位基因频率
+    * 转换为tped格式，生成sample.tped和sample.tfam文件。
 ```
-1.计算等位基因频率
-# 转换为tped格式，生成sample.tped和sample.tfam文件。
 vcftools --vcf QC.sample-select-geno005-maf003.vcf --plink-tped --out sample
 
-# sample.tfam修改第一列数据为breed ID。
-
-# 提取文件sample.pop.cov，格式为：共三列，前两列与修改后的sample.tfam前两列一样，为群体ID和样本ID，第三列和第一列一致，tab分隔。
+sample.tfam修改第一列数据为breed ID。
+```
+    * 提取文件sample.pop.cov，格式为：共三列，前两列与修改后的sample.tfam前两列一样，为群体ID和样本ID，第三列和第一列一致，tab分隔。
+```
 cat sample.tfam |awk '{print $1"\t"$2"\t"$1}' >sample.pop.cov
-
-# 计算等位基因组的频率，生成plink.frq.strat和plink.nosex文件
+```
+    * 计算等位基因组的频率，生成plink.frq.strat和plink.nosex文件
+```
 plink --threads 12 --tfile sample --freq --allow-extra-chr --chr-set 29 --within sample.pop.cov 
-#压缩等位基因频率文件
+# 压缩等位基因频率文件
 gzip plink.frq.strat 
-
-#转换格式【耗时小时计】
+```
+     * 转换格式【耗时小时计】
+```
 #用treemix自带脚本进行格式转换，notes：输入输出都为压缩文件，plink2treemix.py使用python2并需要绝对路径（否则报错）。
 python2 /home/sll/miniconda3/bin/plink2treemix.py plink.frq.strat.gz sample.treemix.in.gz 
-2.treemix推断基因流
+```
+  2. treemix推断基因流
+```
 # 多次分析以评估最佳m值
 比如m取1-10(常用1-5,1-10)，每个m值重复5次(至少两次)
 for m in {1..5}
@@ -301,18 +307,19 @@ done
 -noss    关闭样本量校正。TreeMix计算协方差会考虑每个种群的样本量，有些情况(如果有种群的样本只有1个)会过度校正，可以关闭。
 -g old.vertices.gz old.edges.gz #使用之前生成的树和图结果，用-g指定之前的两个结果文件
 -cor_mig known_events and -climb #合并已知的迁移事件
-
-2.2. 最佳迁移边缘个数选择
-将生成的llik、cov、modelcov文件放置在同一文件夹，使用R包OptM分析：
-
+```
+  3. 最佳迁移边缘个数选择
+    * 将生成的llik、cov、modelcov文件放置在同一文件夹，使用R包OptM分析：
+```
 library(OptM)
 linear = optM("./data") ##文件夹名
 plot_optM(linear)
 
 生成图中，当Δm值最小时的migration edges为最佳迁移边缘个数
-2.3.基因渗入作图
-使用m=最佳迁移边缘个数结果文件做图
-
+```
+  4. 基因渗入作图
+    * 使用m=最佳迁移边缘个数结果文件做图
+```
 source("plotting_funcs.R") #treemix scr文件夹中R脚本
 plot_tree("TreeMix") #TreeMix为结果文件前缀
 
@@ -320,17 +327,27 @@ plot_tree("TreeMix") #TreeMix为结果文件前缀
 prefix="sample.3"  ## treemix产生的结果文件前缀
 library(RColorBrewer)
 library(R.utils)
-par(mfrow=c(2,3))
-for(edge in 1:3){
-  plot_tree(cex=0.8,paste0(prefix,".",edge))
-  title(paste(edge,"repetition"))
+ par(mfrow=c(2,3))
+ for(edge in 1:3){
+   plot_tree(cex=0.8,paste0(prefix,".",edge))
+   title(paste(edge,"repetition"))
 } # 放的是m012345，则0:5
 ```
 #### f3、f4检验以及D检验:
-* D 统计量（Patterson’s D  statistic）是目前最广为使用的渗入检测方法之一。D 统计量需要四个群体，这里称之为 P1、P2、P3 和 O。他们的系统发育关系如图 1-15 所示，为(((P1,P2)P3,)O)。其中，P1 和 P2 为姐妹群，O 为外群。对于这四个群体中存在的双等位 SNP，以外群O 中的类型作为祖先型 A（即 ancestral  allele），另一种则为衍生型 B（即 derived allele）。在已知的系统发育关系的情况下，基因组上绝大多数 SNP 在这四个群体中的排布模式应该为 BBAA，即 P1 和 P2 同为衍生型等位基因，而 P3 和 O 同为祖先型的等位基因。BBAA 的模式是符合系统发育关系的，但如果 P2 和 P3 之间发生了基因流，那么则会产生大量 ABBA 模式的位点，即 P2 和 P3 共享了同一种等位基因。反之，如果 P1 和 P3 之间发生了渗入，则会产生大量 BABA 模式的位点。![image](https://user-images.githubusercontent.com/111029483/222377047-991108ca-381b-4e53-909b-f1cb211bcce6.png)
+* D 统计量（Patterson’s D  statistic）是目前最广为使用的渗入检测方法之一。D 统计量需要四个群体，这里称之为 P1、P2、P3 和 O。他们的系统发育关系如图 1-15 所示，为(((P1,P2)P3,)O)。其中，P1 和 P2 为姐妹群，O 为外群。对于这四个群体中存在的双等位 SNP，以外群O 中的类型作为祖先型 A（即 ancestral  allele），另一种则为衍生型 B（即 derived allele）。在已知的系统发育关系的情况下，基因组上绝大多数 SNP 在这四个群体中的排布模式应该为 BBAA，即 P1 和 P2 同为衍生型等位基因，而 P3 和 O 同为祖先型的等位基因。BBAA 的模式是符合系统发育关系的，但如果 P2 和 P3 之间发生了基因流，那么则会产生大量 ABBA 模式的位点，即 P2 和 P3 共享了同一种等位基因。反之，如果 P1 和 P3 之间发生了渗入，则会产生大量 BABA 模式的位点。
+* ![image](https://user-images.githubusercontent.com/111029483/222377047-991108ca-381b-4e53-909b-f1cb211bcce6.png)
 * 但实际上，由于 P1、P2 和 P3 的共同祖先在某些位点上可能是存在多态性的，这种多态性可能会随机分配给这三个群体，从而导致 ABBA 或者 BABA 的情况。这种现象通常被称为不完全谱系分选（incomplete  lineage  sorting，ILS）。因此单独去检测ABBA 或者 BABA 模式的位点数量无法判断它们是由于 ILS 还是渗入导致的。但由于ILS 是不受选择的，所以它产生的 ABBA 和 BABA 模式的位点数量应该是大致相当的。所以我们可以通过比较 ABBA 和 BABA 的数量是否有显著的差异来判断是单纯的 ILS还是发生了渗入。
-* ![image](https://user-images.githubusercontent.com/111029483/222377311-d0c5c6f9-5d4b-4cbd-91a1-26dc15a9d9e3.png)
-
+* 不完全谱系分选(ILS,Incomplete Lineage sorting):位点树（基因树）和物种树不一致的现象。例如ABC物种分化前某一位点存在多态性，为0/1。随着C分化出去，而此多态性的位点在C中发生了固定，为1，而在AB祖先中是以多态存在。当AB发生分化时，此等位以随机的方式分别进入AB物种中。当B的位点和C相同时，即发生BC关系更近的现象。我们以为是BC之间存在基因流的现象，而实际上为不完全谱系分选。
+* ![image](https://user-images.githubusercontent.com/111029483/222377311-d0c5c6f9-5d4b-4cbd-91a1-26dc15a9d9e3.png)其中，C ABBA表示 ABBA 模式位点的数量。D 统计为符合 ABBA 模式的位点数量与 BABA 模式的位点数量之差，除以 ABBA 模式和 BABA 模式位点数量之和。故 D统计量为正时，ABBA 的数量更多，因此可能是 P2 和 P3 之间发生了渗入。反之，D统计量为负时，BABA 数量更多，可能是 P1 和 P3 之间发生了渗入。由于 D 统计量的计算是基于对 ABBA 和 BABA 模式位点的计数，因此它也被称之为 ABBA-BABA test。
+* 需要注意的是，D statistic 中四个群体的排列顺序以及正负值代表的含义在不同的软件中可能并不相同，如 *ADMIXTOOLS中D为正值时可能是 P1 和 P3 之间发生了渗入*、ANGSD  doAbbababa2和 Dsuite.
+* 外群在 D statistic 中的作用主要是为了判断祖先型等位基因，但是对于 D statistic来说，判断哪个是祖先型，哪个是衍生型，其实并不重要，因为 ABBA 和 BAAB 是等效的。所以也就有研究人员尝试只使用 3 个群体判断渗入，其统计量称为 D3
+##### f3检验
+###### 1 AdmixTools中的qp3Pop
+    1. AdmixTools需要特征（eigenstrat）文件，要将vcf文件转换为eigenstrat。
+```
+bash convertVCFtoEigenstrat.sh QC.sample-select-geno005-maf003.vcf
+```
+    2.
 
 
 
