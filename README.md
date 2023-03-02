@@ -352,16 +352,13 @@ library(R.utils)
 * 公式为： f3(A,B;C)=(c-a)(c-b)
 * F3中的3其实表示了三个物种之间的基因流，如果一个物种（C）与另外两个物种（A，B）之间的等位基因频率相关性越高，则说明该物种C可能混合了A，B的基因
 * ![image](https://user-images.githubusercontent.com/111029483/222400789-862b524f-82f9-4584-a68a-9667b702a87a.png)
-> A, B为参考群体，C为测试群体
-统计量F3检验的内容有：
-（i）C是否混合A，B的遗传变异；
-（ii）A，B是否共同获得了C的遗传漂变。
-如果C来自于A，B的混合，C的等位基因频率c应该趋向于a和b之间，所以，如果F3算出来的值是一个负值的话（同时满足统计学检验的标准，Z-scores=F3/SE(F3)要小于-3），认为F3具有显著的统计学效应，即C中的一些基因来自于A和B的混合。
-值得注意的是，上面反过来不成立，F3大于0，并不认为C中不含有A和B的混合
+> * A, B为参考群体，C为测试群体
+ * 统计量F3检验的内容有：
+ * （i）C是否混合A，B的遗传变异；
+ * （ii）A，B是否共同获得了C的遗传漂变。
+ * 如果C来自于A，B的混合，C的等位基因频率c应该趋向于a和b之间，所以，如果F3算出来的值是一个负值的话（同时满足统计学检验的标准，Z-scores=F3/SE(F3)要小于-3），认为F3具有显著的统计学效应，即C中的一些基因来自于A和B的混合。
+ * 值得注意的是，上面反过来不成立，F3大于0，并不认为C中不含有A和B的混合
 如果令C物种为外来物种的话，那么C其实无论如何都不可能是AB的混合，而F3值越大，可以用来表征A,B之间的相似性越强(outgroup f3)
-
-
-
 
 ###### 1 AdmixTools中的qp3Pop
 1. AdmixTools需要特征（eigenstrat）文件，要将vcf文件转换为eigenstrat。
@@ -499,13 +496,118 @@ threepop -i sample.treemix.in.gz -k 500 > 3pop
 
 cat 3pop |grep -v Estimating |grep -v nsnp|tr ';' ' ' > 3pop.txt
 ```
+##### f4统计量
+```
+判断A,B与C,D之间是否存在基因流
 
+f4(A,B;C,D)=(a-b)(c-d)
 
+若B,C之间发生基因流，B,C等位基因频率趋同，介于A,D之间，f4<0
+若A,D之间发生基因流，A,D等位基因频率趋同，介于B,C之间，f4<0
+A,C或B,D之间发生基因流，f4>0
+```
+将A当作外来物种，那么我们就可以直接通过F4的正负来判断基因流了. 若F4>0，则B与D之间有基因流；若F4<0，则B与C之间有基因流
+###### Treemix中的fourpop
+```
+treemix -i sample.treemix.in.gz -k 500 > 4pop
+cat 4pop |grep -v Estimatin|grep -v nsnp |tr ',' ' '|tr ';' ' ' > 4pop.txt
+```
+##### D-statistics
+* 也叫ABBA-BABA检验，用于检测四个群体是否存在由“Admixture”造成的显著不符合拓扑树结构事件的方法，在正确的拓扑结构下，又可以判断其中两个群体是否存在基因交流，假定系统发育拓扑结构（（（W,X）;Y）,Outgroup），D统计通过对符合ABBA，BABA，BBAA，BBBA模式的位点数目进行计数，并根据计数结果进行基因流检测，其中A表示祖先型等位基因，B表示衍生型等位基因。
+* 正常情况下，由于拓扑结构的固定，BBBA于BBAA模式的位点应是最常见的。而ABBA与BABA模式的位点不支持四个群体的拓扑结构，从概率上讲两种模式的位点数应该一致。D统计通过计算ABBA与BABA模式位点数的差值与两种模式位点数的和的比值判断X与Y或W之间是否存在基因流。使用Z检验作为显著性检验算法（（（W,X）;Y）,Outgroup）。X,Y是姊妹类群(多为一个物种内的两个种群)，W是潜在的基因渐渗来源物种，Outgroup是外类群。
+###### AdmixTools中的qpDstat
+1. AdmixTools需要特征（eigenstrat）文件，要将vcf文件转换为eigenstrat。
+```
+bash convertVCFtoEigenstrat.sh QC.sample-select-geno005-maf003.vcf
+```
+2. 修改文件
+```
+1、修改.ind文件的第三列为品种id
+2、提供A、B、C、D群体的pop文件，4列
+3、修改脚本文件par.PED.EIGENSTRAT.QC.sample-select-out-geno005-maf003，里的东西为：
+genotypename:   QC.sample-select-out-geno005-maf003.eigenstratgeno
+snpname:        QC.sample-select-out-geno005-maf003.snp
+indivname:      QC.sample-select-out-geno005-maf003.ind
+popfilename:    pop.txt
+f4mode: YES  ##此选项为进行f4检验，默认是NO
+```
+3. qpDstat分析
+```
+qpDstat -p par.PED.EIGENSTRAT.QC.sample-select-out-geno005-maf003 > 4pop_admixtools
 
+D统计量=0，说明总体ABBA和BABA的数量相同，不存在明显的渗入；如果不等于0，则或许存在渗入。
+Z=D/ standard_error
+Z>3和<-3分别是正负显著
+也就是用于判断X,Y与W之间是否发生基因流
+```
+### 渗入片段的检测（单倍型）
+* 基因渗入指两个物种之间通过杂交方式进行遗传物质的交换，一个群体的遗传物质通过杂交转移至另一个群体。基因流的研究证明它是影响群体演化的一个重要因素。一个群体可以通过基因交流快速获得新的等位基因，增加群体的适应性变异。
 
+* 与HAPMIX, LAM-LD, RFmix需要设置多个参数，HAPMIX需要提供遗传图谱、充足率、突变率和平均代时等较难获得的生物学参数。Loter除了单倍型数据以外不需要其他任何生物学参数即可完成祖先血统推断。与HAPMIX, LAM-LD, RFmix软件相比，在考虑人工模拟和人工混群的情况下，随着基因渗入次数的增加，Loter软件受到的影响较小。
+* 提供足够的祖先物种的基因组数据来作为来源群体（source populations），同时也需要发生渗入样本的基因组数据。对于每一个渗入个体的每一个变异位点，loter均会进行祖先来源判断，从所提供的来源群体中选择一个可能性最大的群体作为其来源。
+需要提供一个几乎没有发生渗入或者渗入比例极低的群体作为对照。
+#### rIBD分析--IBD(beagle4.0版本)
+```
+血缘同源（IBD）是指两个或两个以上的等位基因单倍型遗传自同意祖先且未发生重组事件。
+一般为50Kb窗口，25kb步长，计算每个区段中两群体间的共享IBD单倍型数量。
+而由于群体间两两比较的总数不同，故对共享IBD单倍型进行标准化，获得nIBD值，标准化后的nIBD值分布在0（未检测到共享IBD）——1
+nIBD=cIBD/tIBD
+cIBD表示两群体间所有共享IBD单倍型数量，tIBD表示两群体所有单倍型数量。为了能直接体现不同群体间共享IBD单倍型的差异，可以计算rIBD
+rIBD= nIBDgroup1- nIBDgroup2
+nIBDgroup1是指某一群体与群体1的共享IBD，nIBDgroup2是指某一群体与群体2的共享IBD。
+```
+```
+java -jar -Xmn12G -Xms24G -Xmx48G /home/sll/software/beagle.r1399.jar ibd=true impute=false window=50000 overlap=25000 gt=out.beagle.vcf.gz out=out.beagle.ibd
 
+结果文件：
+1) First sample identifier 第一个样本ID
+2) First sample haplotype index (1 or 2) 第一个样本的单倍型
+3) Second sample identifier 第二个样本ID
+4) Second sample haplotype index (1 or 2) 第二个样本的单倍型
+5) Chromosome  染色体
+6) Starting genomic position (inclusive) 起始位置
+7) Ending genomic position (inclusive) 终止位置
+8) LOD score (cM length of IBD segment）值越大越好，IBD段的cM长度
+```
+#### Loter(结果看不懂)
+1. bagle填充并转为单倍型格式
+```
+java -jar -Xmn12G -Xms24G -Xmx48G  /home/software/beagle.25Nov19.28d.jar gt=common_89_cattle_851_ASIA.filter.recode.vcf  out=out.beagle ne=233
+```
+2. Loter推算渗入片段
+```
+loter_cli -r ANG.1.test.recode.vcf MSU.1.test.recode.vcf -a BC.1.test.recode.vcf -f vcf -o interval.txt -n 8 -pc -v
 
+-r REF [REF ...], --ref REF [REF ...]  files storing input reference haplotypes.可以是多个，空格分开输入
+-a ADM, --adm ADM  file storing input admixed haplotypes.
+-o OUTPUT, --output OUTPUT
+           file to store the infered ancestries of admixed haplotypes, saved as a numpy array by default, or as a text CSV file if the file extension is '.txt'.
+-f 输入文件的格式；有npy(默认), txt（csv）, vcf可选，所有的输入文件格式一致
+-n CPU数量
+-pc Run the phase correction module after the inference algorithm (only available for data from diploid organisms)
 
+```
+#### RFMix
+需提供比较完善的参考群体，对目标群体的遗传背景应清楚
+1. 过滤（去除多等位基因位点）
+2. beagle填充
+```
+java -jar -Xmn12G -Xms24G -Xmx48G  /home/software/beagle.25Nov19.28d.jar gt=tibetan-36.filter-nchr.recode.vcf  out=tibetan-36.filter-nchr.recode.vcf.beagle ne=36
+```
+3. RFMix推断渗入区域（分染色体推断）
+```
+rfmix -f BC.test.recode.vcf -r ANG.test.recode.vcf -m map.txt -g genetic.map -o outer --chromosome=1
 
+-f 目标群体
+-r 参考群体(多个群体在一个vcf文件里即可)
+-m map文件包含两列；1：参考群体样本ID，2：参考群体品种ID（也是主要设定ID的文件）
+-g genetic.map包含三列；1:染色体号，2:物理距离(bp)，3:遗传距离（cM）, 1cM=1Mb(10-6)
+--chromosome= 选择需要分析的染色体（和vcf文件一致）
+
+为了获得某一祖先源比例显著高于全基因组水平的片段（定义为过量片段），对所有片段进行卡方检验
+
+应该是看msp.tsv文件，可规定渗入单倍型为多少为渗入区域，用于构建进化树验证渗入事件以及计算渗入时间
+验证：可利用渗入区域对其进行进化树分析，若两群体之间存在基因渗入，两个群体内的个体在进化树上会聚集在一起。
+```
 
 
