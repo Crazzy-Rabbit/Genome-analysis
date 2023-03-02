@@ -102,9 +102,9 @@ familynames:    NO
 产生三个pca所需的输入文件 example.eigenstrat example.snp example.ind
 
 2. smartpca做PCA
-
-smartpca -p runningpca.conf
 ```
+smartpca -p runningpca.conf
+
 ##config file
 genotypename: example.geno
 snpname: example.snp
@@ -116,7 +116,7 @@ numoutevec: 10
 numoutlieriter: 5
 outliersigmathresh: 6.0
 ```
-##### Admixture
+#### Admixture
 群体结构分析的算法模型为：假设所有群体拥有K个祖先，每个群体的特征由其每个位点的等位基因频率决定，在哈代-温伯格平衡下，使用最大似然估计算法将实际群体中的每个个体以概率的形式，计算每个个体的基因组变异来源，用Q值表示，Q值越大，表明该位点来自这个祖先群体的可能性越大，从而将每个位点归类到不同的祖先成分。
 ```
 # admixture
@@ -141,8 +141,81 @@ for K in 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do admixture --cv QC.sample-select-g
 ## CV error最小的为最佳K值
 grep -h CV log*.out 
 ```
-##### 系统发育树
-###### MEGA
+#### 系统发育树
+##### MEGA
+```
+# 计算genome
+plink  --bfile QC.ld.cattle_204_hebing_Chr1_29_genotype.nchr-geno005-maf003-502502 \
+       --allow-extra-chr --chr-set 29  \
+       --genome
+# 转换为.meg格式的矩阵形式
+PLINK_genome_MEGA.pl
+第一个open里改成自己的genome文件
+第二个open里改成自己的fam文件
+第三个open里将>后面的改成输出的文件名.meg
+在下面的sample_size里，将数量改成自己使用的数量
+
+
+#!usr/bin/perl
+# define array of input and output files
+open (AAA,"plink.genome") || die "can't open AAA";
+open (BBB," QC.ld.cattle_204_hebing_Chr1_29_genotype.nchr-geno005-maf003-502502.fam") || die "can't open BBB"; 
+open (CCC,"> cattle_204_hebing_Chr1_29.meg");
+my @aa=<AAA>;
+my @bb=<BBB>;
+$sample_size=204; ###  涓綋鏁扮洰
+print CCC "#mega\n!Title: $sample_size pigs;\n!Format DataType=Distance DataFormat=UpperRight NTaxa=$sample_size;\n\n"; 
+foreach ($num1=0;$num1<=$#bb;$num1++){
+	chomp $bb[$num1];
+	@arraynum1=split(/\s+/,$bb[$num1]);
+	print CCC "#$arraynum1[1]\n";       ##涓綋鐨処D鍚嶇О
+	}
+print CCC "\n";
+@array=();
+foreach ($num2=1;$num2<=$#aa;$num2++){
+	chomp $aa[$num2];
+	@arraynum1=split(/\s+/,$aa[$num2]);
+	push(@array,1-$arraynum1[12]);
+	}
+	
+@array2=(0);
+$i=$sample_size;
+while ($i>0){	
+	push(@array2,$array2[$#array2]+$i);
+	$i=$i-1;
+	}
+print "@array2";
+
+for ($i=($sample_size-1); $i>=0; $i=$i-1){
+	print CCC " " x ($sample_size-($i+1));
+	    for ($j=$array2[$sample_size-$i-1]; $j<=$array2[$sample_size-$i]-1; $j++){
+		                                                                          print CCC "$array[$j] ";	
+			                                                                     }
+	    print  CCC "\n";
+	}
+close AAA;
+close BBB;
+close CCC;
+```
+##### RAxML(进化树):
+```
+1、转为phy格式：
+python /home/sll/software/vcf2phylip.py --input FASN.vcf.recode.vcf
+
+2、建树：
+raxmlHPC-PTHREADS-SSE3 -f a -m GTRGAMMA \
+                       -p 12345 -x 12345 \
+                       -# 100 -s FASN.min4.phy \
+                       -n raxml -T 30
+-f a此参数用于选择 RAxML 运算的算法。可以设定的值非常之多。 a 表示执行快速 Bootstrap 分析并搜索最佳得分的 ML 树。
+-x 12345指定一个 int 数作为随机种子，以启用快速 Bootstrap 算法。
+-p 12345指定一个随机数作为 parsimony inferences 的种子。
+-# 100指定 bootstrap 的次数。
+-m PROTGAMMALGX 指定核苷酸或氨基酸替代模型。PROTGAMMALGX 的解释： "PROT" 表示氨基酸替代模型； GAMMA 表示使用 GAMMA 模型； X 表示使用最大似然法估计碱基频率。
+-s ex.phy指定输入文件。phy 格式的多序列比对结果。软件包中包含一个程序来将 fasta 格式转换为 phy 格式。
+-n ex输出文件的后缀为 .ex 。
+-T 20指定多线程运行的 CPUs 。
+```
 
 
 
