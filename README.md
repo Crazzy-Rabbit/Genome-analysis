@@ -347,14 +347,158 @@ library(R.utils)
 * 需要注意的是，D statistic 中四个群体的排列顺序以及正负值代表的含义在不同的软件中可能并不相同，如 *ADMIXTOOLS中D为正值时可能是 P1 和 P3 之间发生了渗入*、ANGSD  doAbbababa2和 Dsuite.
 * 外群在 D statistic 中的作用主要是为了判断祖先型等位基因，但是对于 D statistic来说，判断哪个是祖先型，哪个是衍生型，其实并不重要，因为 ABBA 和 BAAB 是等效的。所以也就有研究人员尝试只使用 3 个群体判断渗入，其统计量称为 D3
 ##### f3检验
+* f3统计又称admixture检验，常用于判断一个群体（或其祖先）是否来自两个群体的混和。由于混合后的群体存在遗传漂变，随着时间的推移其混合的分子学特征会逐渐减弱，因此f3检验比较适合近期的基因流信号检测。
+* 目前能做f3检验的只有ADMIXTOOLS软件包中的qp3Pop和TreeMix中的threepop, 且需要精确的基因型信息。
+* 公式为： f3(A,B;C)=(c-a)(c-b)
+* F3中的3其实表示了三个物种之间的基因流，如果一个物种（C）与另外两个物种（A，B）之间的等位基因频率相关性越高，则说明该物种C可能混合了A，B的基因
+* ![image](https://user-images.githubusercontent.com/111029483/222400789-862b524f-82f9-4584-a68a-9667b702a87a.png)
+> A, B为参考群体，C为测试群体
+统计量F3检验的内容有：
+（i）C是否混合A，B的遗传变异；
+（ii）A，B是否共同获得了C的遗传漂变。
+如果C来自于A，B的混合，C的等位基因频率c应该趋向于a和b之间，所以，如果F3算出来的值是一个负值的话（同时满足统计学检验的标准，Z-scores=F3/SE(F3)要小于-3），认为F3具有显著的统计学效应，即C中的一些基因来自于A和B的混合。
+值得注意的是，上面反过来不成立，F3大于0，并不认为C中不含有A和B的混合
+如果令C物种为外来物种的话，那么C其实无论如何都不可能是AB的混合，而F3值越大，可以用来表征A,B之间的相似性越强(outgroup f3)
+
+
+
+
 ###### 1 AdmixTools中的qp3Pop
-    1. AdmixTools需要特征（eigenstrat）文件，要将vcf文件转换为eigenstrat。
+1. AdmixTools需要特征（eigenstrat）文件，要将vcf文件转换为eigenstrat。
 ```
 bash convertVCFtoEigenstrat.sh QC.sample-select-geno005-maf003.vcf
 ```
-    2.
+* convertVCFtoEigenstrat.sh
+```
+#!/bin/bash
+# Script to convert vcf to eigenstrat format for ADMIXTOOLS
+# Written by Joana Meier
+# It takes a single argument: the vcf file (can be gzipped) and 
+# optionally you can specify --renameScaff if you have scaffold names (not chr1, chr2...)
+# Here, you can change the recombination rate which is currently set to 2 cM/Mb 
+rec=2
+# It requires vcftools and admixtools
+# for some clusters, it is needed to load these modules:
+# module load gcc/4.8.2 vcftools openblas/0.2.13_seq perl/5.18.4 admixtools
+renameScaff="FALSE"
+# If help is requested
+if [[ $1 == "-h" ]]
+then
+ echo "Please provide the vcf file to parse, and optionally add --renameScaff if you have scaffolds instead of chromosomes"
+ echo "Usage: convertVCFtoEigenstrat.sh <vcf file> --renameScaff (note, the second argument is optional)"
+ exit 1
+# If the second argument renameScaff is given, set it to True
+elif [[ $2 == "--renameScaff" ]]
+then
+ renameScaff="TRUE"
+# If no argument is given or the second one is not -removeChr, give information and quit
+elif [ $# -ne 1 ]
+then
+ echo "Please provide the vcf file to parse, and optionally add --renameScaff if you have scaffolds instead of chromosomes"
+ echo "Usage: ./convertVCFtoEigenstrat.sh <vcf file> --renameScaff (note, the second argument is optional)"
+ exit 1
+fi
+# Set the first argument to the file name
+file=$1
+file=${file%.gz}
+file=${file%.vcf}
+# if the vcf file is gzipped:
+if [ -s $file.vcf.gz ]
+then
+ # If renaming of scaffolds is requested, set all chromosome/scaffold names to 1
+ if [ $renameScaff == "TRUE" ]
+ then
+  echo "setting scaffold names to 1 and positions to additive numbers"
+  zcat $file".vcf.gz" | awk 'BEGIN {OFS = "\t";add=0;lastPos=0;scaff=""}{
+    if($1!~/^#/){
+       if($1!=scaff){add=lastPos;scaff=$1}
+       $1="1"
+       $2=$2+add
+       lastPos=$2
+     }
+     print $0}' | gzip > $file.renamedScaff.vcf.gz
+  # Get a .map and .ped file (remove multiallelic SNPs, monomorphic sites and indels)
+  vcftools --gzvcf $file".renamedScaff.vcf.gz" \
+         --plink --mac 1.0 --remove-indels --max-alleles 2 --out $file
+ else
+ # Get a .map and .ped file (remove multiallelic SNPs, monomorphic sites and indels)
+ vcftools --gzvcf $file".vcf.gz" \
+         --plink --mac 1.0 --remove-indels --max-alleles 2 --out $file
+ fi
+# if the file is not gzipped
+else
+ # If renaming of scaffolds is requested, set all chromosome/scaffold names to 1
+ if [ $renameScaff == "TRUE" ]
+ then
+  echo "setting scaffold names to 1 and positions to additive numbers"
+  awk 'BEGIN {OFS = "\t";add=0;lastPos=0;scaff=""}{
+    if($1!~/^#/){
+       if($1!=scaff){add=lastPos;scaff=$1}
+       $1="1"
+       $2=$2+add
+       lastPos=$2
+     }
+     print $0}' $file.vcf | gzip > $file.renamedScaff.vcf.gz
+  # Get a .map and .ped file (remove multiallelic SNPs, monomorphic sites and indels)
+  vcftools --gzvcf $file".renamedScaff.vcf.gz" \
+         --plink --mac 1.0 --remove-indels --max-alleles 2 --out $file
+ else
+ vcftools --vcf $file".vcf" --plink --mac 1.0 --remove-indels --max-alleles 2 --out $file
+ fi
+fi
+# Change the .map file to match the requirements of ADMIXTOOLS by adding fake Morgan positions (assuming a recombination rate of 2 cM/Mbp)
+awk -F"\t" -v rec=$rec 'BEGIN{scaff="";add=0}{
+        split($2,newScaff,":")
+        if(!match(newScaff[1],scaff)){
+                scaff=newScaff[1]
+                add=lastPos
+        }
+        pos=add+$4
+	count+=0.00000001*rec*(pos-lastPos)
+        print newScaff[1]"\t"$2"\t"count"\t"pos
+        lastPos=pos
+}' ${file}.map  | sed 's/^chr//' > better.map
+mv better.map ${file}.map
+# Change the .ped file to match the ADMIXTOOLS requirements
+awk 'BEGIN{ind=1}{printf ind"\t"$2"\t0\t0\t0\t1\t"; 
+ for(i=7;i<=NF;++i) printf $i"\t";ind++;printf "\n"}' ${file}.ped > tmp.ped
+mv tmp.ped ${file}.ped
+# create an inputfile for convertf
+echo "genotypename:    ${file}.ped" > par.PED.EIGENSTRAT.${file}
+echo "snpname:         ${file}.map" >> par.PED.EIGENSTRAT.${file}
+echo "indivname:       ${file}.ped" >> par.PED.EIGENSTRAT.${file}
+echo "outputformat:    EIGENSTRAT" >> par.PED.EIGENSTRAT.${file}
+echo "genotypeoutname: ${file}.eigenstratgeno" >> par.PED.EIGENSTRAT.${file}
+echo "snpoutname:      ${file}.snp" >> par.PED.EIGENSTRAT.${file}
+echo "indivoutname:    ${file}.ind" >> par.PED.EIGENSTRAT.${file}
+echo "familynames:     NO" >> par.PED.EIGENSTRAT.${file}
+# Use CONVERTF to parse PED to eigenstrat
+convertf -p par.PED.EIGENSTRAT.${file}
+# change the snp file for ADMIXTOOLS:
+awk 'BEGIN{i=0}{i=i+1; print $1"\t"$2"\t"$3"\t"i"\t"$5"\t"$6}' $file.snp > $file.snp.tmp
+mv $file.snp.tmp $file.snp
+```
+2. 文件及运算脚本修改
+```
+1、修改.ind文件的第三列为品种id
+2、提供A、B、C群体的pop文件，3列（outgroup f3时，C为外群，判断A和B的关系）
+3、修改脚本文件par.PED.EIGENSTRAT.QC.sample-select-out-geno005-maf003，里的东西为：
+genotypename:   QC.sample-select-out-geno005-maf003.eigenstratgeno
+snpname:        QC.sample-select-out-geno005-maf003.snp
+indivname:      QC.sample-select-out-geno005-maf003.ind
+popfilename:    pop.txt
+inbreed: YES ##(做outgroup f3应删除这一行，目标群体存在近交，则加上这行)
+```
+3. qp3Pop分析
+```
+qp3Pop -p par.PED.EIGENSTRAT.QC.sample-select-out-geno005-maf003 > 3pop_qp3pop
+```
+###### 2 Treemix中的threepop
+```
+threepop -i sample.treemix.in.gz -k 500 > 3pop
 
-
+cat 3pop |grep -v Estimating |grep -v nsnp|tr ';' ' ' > 3pop.txt
+```
 
 
 
