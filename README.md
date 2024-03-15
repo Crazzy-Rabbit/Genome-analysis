@@ -6,7 +6,7 @@
 - [ ] pangenome --->  want to learn and do in the future
 - [ ] 单细胞分析 --->  want to learn and do in the future
 - [ ] 孟德尔随机化 --->  want to learn and do in the future
-    -[ ] 整合多组学--SMR分析，精确定位致病突变
+    - [ ] 整合多组学--SMR分析，精确定位致病突变
 - [ ] 算法 + 数据结构 --->  want to learn and do in the future
     - [x] Python 基础
     - [x] R绘图
