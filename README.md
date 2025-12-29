@@ -10,3 +10,5 @@
 - [ ] 算法 + 数据结构 --->  want to learn and do in the future
     - [x] Python 基础
     - [x] R绘图
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Crazzy-Rabbit/Genome-analysis&type=Date)](https://star-history.com/#Crazzy-Rabbit/Genome-analysis&Date)
